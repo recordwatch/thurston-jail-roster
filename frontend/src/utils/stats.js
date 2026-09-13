@@ -115,21 +115,6 @@ export function computeStats(entries) {
     if (d) bookingsByDayOfWeek[d.getDay()].count++
   }
 
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
-  const last30Days = []
-  for (let i = 29; i >= 0; i--) {
-    last30Days.push({ date: new Date(today.getTime() - i * DAY_MS), count: 0 })
-  }
-  for (const e of entries) {
-    const d = getBookedAt(e)
-    if (!d) continue
-    const dd = new Date(d)
-    dd.setHours(0, 0, 0, 0)
-    const bucket = last30Days.find(x => x.date.getTime() === dd.getTime())
-    if (bucket) bucket.count++
-  }
-
   const chargeCounts = {}
   for (const e of entries) {
     for (const c of e.charges || []) {
@@ -168,7 +153,6 @@ export function computeStats(entries) {
     distinctPeople,
     earliestBooking,
     bookingsByDayOfWeek,
-    last30Days,
     mostCommonCharges,
     timeServed: {
       meanMs: mean(servedMs),

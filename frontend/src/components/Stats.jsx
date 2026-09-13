@@ -41,7 +41,6 @@ export default function Stats() {
     )
   }
 
-  const maxDay = Math.max(1, ...stats.last30Days.map(d => d.count))
   const maxDow = Math.max(1, ...stats.bookingsByDayOfWeek.map(d => d.count))
 
   return (
@@ -78,17 +77,6 @@ export default function Stats() {
           </div>
         </div>
       </div>
-
-      <section className="stats-section">
-        <h3>Bookings Over Last 30 Days</h3>
-        <div className="daily-chart">
-          {stats.last30Days.map(d => (
-            <div className="daily-bar-wrap" key={d.date.toISOString()} title={`${formatShortDate(d.date)}: ${d.count}`}>
-              <div className="daily-bar" style={{ height: `${(d.count / maxDay) * 100}%` }} />
-            </div>
-          ))}
-        </div>
-      </section>
 
       <section className="stats-section">
         <h3>Most Common Charges</h3>

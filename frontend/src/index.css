@@ -342,28 +342,6 @@ body {
   margin-top: 0.4rem;
 }
 
-.daily-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 120px;
-  background: #201B15;
-  border: 1px solid #4A3F30;
-  padding: 0.75rem;
-}
-.daily-bar-wrap {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-}
-.daily-bar {
-  width: 100%;
-  min-height: 2px;
-  background: #A85C2E;
-}
-.daily-bar-wrap:hover .daily-bar { background: #D9A860; }
-
 .bar-list {
   background: #201B15;
   border: 1px solid #4A3F30;
