@@ -222,18 +222,36 @@ export function computeDeepStats(entries) {
   const yearStart = new Date(now.getFullYear(), 0, 1)
 
   let bailToday = 0, bailWeek = 0, bailMonth = 0, bailYTD = 0
-  let bookingsWithBail = 0, bookingsNoBail = 0
+  let bookingsBailSet = 0, bookingsHeldNoBail = 0, bookingsBailUnknown = 0
   for (const e of entries) {
-    const amts = (e.charges || []).map(c => parseBail(c.bail)).filter(Boolean)
+    const charges = e.charges || []
+    const amts = charges.map(c => parseBail(c.bail)).filter(Boolean)
     const total = amts.reduce((a, b) => a + b, 0)
-    if (amts.length > 0) bookingsWithBail++
-    else bookingsNoBail++
     const d = getBookedAt(e)
     if (d && total > 0) {
       if (d >= todayStart) bailToday += total
       if (d >= weekAgo) bailWeek += total
       if (d >= monthStart) bailMonth += total
       if (d >= yearStart) bailYTD += total
+    }
+
+    if (charges.length === 0) {
+      bookingsBailUnknown++
+    } else {
+      let hasNoBail = false
+      let hasUnknown = false
+      for (const c of charges) {
+        if (parseBail(c.bail) !== null) continue
+        if (c.bail && c.bail.toUpperCase().includes('NO BAIL')) {
+          hasNoBail = true
+        } else {
+          hasUnknown = true
+          console.warn('[bail] unrecognized bail text:', c.bail, '—', e.name)
+        }
+      }
+      if (hasUnknown) bookingsBailUnknown++
+      else if (hasNoBail) bookingsHeldNoBail++
+      else bookingsBailSet++
     }
   }
 
@@ -279,8 +297,9 @@ export function computeDeepStats(entries) {
       week: bailWeek,
       month: bailMonth,
       ytd: bailYTD,
-      bookingsWithBail,
-      bookingsNoBail,
+      bookingsBailSet,
+      bookingsHeldNoBail,
+      bookingsBailUnknown,
       top10: bailRows.slice(0, 10),
       mostExpensive: bailRows[0] || null,
       byCategory: bailByCategory,
