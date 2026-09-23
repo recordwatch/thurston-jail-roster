@@ -94,12 +94,17 @@ export function computeStats(entries) {
   const now = new Date()
   let avgDailyPopulation = inCustody.length
   let earliestBooking = null
-  if (withStart.length) {
+    if (withStart.length) {
     earliestBooking = withStart.reduce((min, e) => (e.start < min ? e.start : min), withStart[0].start)
-    const dayCount = Math.max(1, Math.floor((now - earliestBooking) / DAY_MS) + 1)
+
+    // Only average over days the scraper was actually watching
+    const seen = entries.map(e => new Date(e.firstSeen)).filter(d => !isNaN(d))
+    const trackingStart = seen.reduce((min, d) => (d < min ? d : min), seen[0])
+
+    const dayCount = Math.max(1, Math.floor((now - trackingStart) / DAY_MS) + 1)
     let total = 0
     for (let i = 0; i < dayCount; i++) {
-      const day = new Date(earliestBooking.getTime() + i * DAY_MS)
+      const day = new Date(trackingStart.getTime() + i * DAY_MS)
       let pop = 0
       for (const e of withStart) {
         if (e.start <= day && (!e.end || e.end > day)) pop++

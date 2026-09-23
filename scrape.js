@@ -66,6 +66,9 @@ async function run() {
 
   const currentIds  = new Set(inmates.map(i => i.idnum));
   const previousIds = new Set(Object.keys(roster));
+  const returning = inmates.filter(i => roster[i.idnum]?.status === 'released');
+  console.log(`  Roster page: ${inmates.length} | returning (marked released but on page): ${returning.length}`);
+  returning.forEach(i => console.log(`    RETURNING: ${i.name} (${i.idnum})`));
 
   const newBookings = inmates.filter(i => !previousIds.has(i.idnum));
   console.log(`  ${newBookings.length} new booking(s) found`);
