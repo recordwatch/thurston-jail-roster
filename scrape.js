@@ -70,7 +70,9 @@ async function run() {
   console.log(`  Roster page: ${inmates.length} | returning (marked released but on page): ${returning.length}`);
   returning.forEach(i => console.log(`    RETURNING: ${i.name} (${i.idnum})`));
 
-  const newBookings = inmates.filter(i => !previousIds.has(i.idnum));
+  const newBookings = inmates.filter(
+    i => !previousIds.has(i.idnum) || roster[i.idnum]?.status === 'released'
+  );
   console.log(`  ${newBookings.length} new booking(s) found`);
 
   let detailMap = {};
