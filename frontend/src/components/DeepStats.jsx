@@ -128,12 +128,16 @@ export default function DeepStats() {
             <div className="stat-card-label">Year to Date</div>
           </div>
           <div className="stat-card">
-            <div className="stat-card-num">{stats.bail.bookingsWithBail}</div>
-            <div className="stat-card-label">Bookings With Bail Set</div>
+            <div className="stat-card-num">{stats.bail.bookingsBailSet}</div>
+            <div className="stat-card-label">Bail Set</div>
           </div>
           <div className="stat-card">
-            <div className="stat-card-num">{stats.bail.bookingsNoBail}</div>
-            <div className="stat-card-label">Bookings With No Bail Set</div>
+            <div className="stat-card-num">{stats.bail.bookingsHeldNoBail}</div>
+            <div className="stat-card-label">Held Without Bail</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-num">{stats.bail.bookingsBailUnknown}</div>
+            <div className="stat-card-label">Unknown (No Charge Data)</div>
           </div>
           {stats.bail.mostExpensive && (
             <div className="stat-card">
