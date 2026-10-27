@@ -4,8 +4,8 @@
 A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Office roster search page every 30 minutes, tracks bookings and releases, and displays them on a public website.
 
 ## URLs
-- **Live site:** (not deployed yet — will be https://theonlytacocat.github.io/thurston-jail-roster/ once GitHub Pages is enabled)
-- **GitHub repo:** (not created yet — see setup steps below)
+- **Live site:** https://recordwatch.github.io/thurston-jail-roster/
+- **GitHub repo:** https://github.com/recordwatch/thurston-jail-roster (all repos live under the `recordwatch` org — no more `theonlytacocat`)
 - **Source data:** Thurston County Sheriff — https://www.co.thurston.wa.us/cm/sheriff/bureau-corrections-roster-search.asp?mod=fourth
 
 ## Architecture
@@ -18,7 +18,7 @@ A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Offi
 - No CAPTCHA — plain HTTP with **axios + cheerio** (same style as Kitsap), no Playwright needed
 - The roster page (`mod=fourth`) is a single unpaginated page listing every current inmate — no pagination to handle
 - Each inmate has an `idnum` (e.g. `Z0072311`), used in place of a booking number — it's the only stable identifier the site exposes
-- Detail pages (`mod=third&idnum=X`) only expose **charge info**: court, cause number, charge, bail, arrest date. Unlike Pierce/Kitsap, Thurston does **not** expose age/sex/race/height/weight/photo — the frontend and data model reflect that (no `DeepStats`/`Stats` pages; not enough demographic data to make them meaningful)
+- Detail pages (`mod=third&idnum=X`) only expose **charge info**: court, cause number, charge, bail, arrest date. Unlike Pierce/Kitsap, Thurston does **not** expose age/sex/race/height/weight/photo — the frontend and data model reflect that. It also has no release-type codes (RPR/RCC/etc.) like Mason, so `/stats` and `/deepstats` are built only from what Thurston does expose (see below)
 - `bookingDate` is derived as the earliest `arrestDate` across a person's charges, since the roster has no explicit booking date field
 - Release detection is diff-based only (no live release feed like Kitsap's XML endpoint): if an `idnum` drops off the roster page, it's marked released
 - Detail fetching is incremental to be polite to a small county server: new bookings get detail fetched in a capped batch (30), and a rolling backfill (40/run) fills in detail for anyone still missing it — mirrors Pierce's approach rather than Kitsap's full-refresh-every-run approach, since Thurston's roster (~280 people) is much larger than Kitsap's
@@ -46,14 +46,26 @@ A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Offi
 - Background: #16130F, primary accent: #A85C2E, highlight: #D9A860
 
 ## Related projects
-- **Kitsap Jail Roster** — https://theonlytacocat.github.io/ksco-scraper/
-- **Pierce County Jail Roster** — https://theonlytacocat.github.io/pierce-jail-roster/
+- **Kitsap Jail Roster** — https://recordwatch.github.io/ksco-scraper/
+- **Pierce County Jail Roster** — https://recordwatch.github.io/pierce-jail-roster/
 - **Mason County Jail Roster** — https://alexasroster.com (also serves the wajaildata.org hub page)
 - **Washington Jail Data hub** — https://wajaildata.org — landing page linking all county monitors; served from `mason-jail-roster/server.js` around line 822 (`.nav-section`). Add a new `<a class="nav-btn">` entry there once this site is live.
 
-## Setup steps still needed (not done by Claude — required GitHub push access this session didn't have)
-1. Create a GitHub repo `thurston-jail-roster` under theonlytacocat
-2. `git remote add origin ...` and push this project
-3. Enable GitHub Pages (Settings → Pages → deploy from `gh-pages` branch), same as the other repos
-4. Trigger the `scrape.yml` workflow once manually (workflow_dispatch) to confirm it runs end-to-end
-5. Add the Thurston link to `mason-jail-roster/server.js`'s `.nav-section` (wajaildata.org hub)
+## Stats pages (unlisted)
+- `#/stats` and `#/deepstats` are routed in `App.jsx` but deliberately not linked from the nav
+- `frontend/src/utils/stats.js` — all computation, client-side from `change_log.json` (`computeStats`, `computeDeepStats`)
+- `frontend/src/components/Stats.jsx`, `DeepStats.jsx` — the pages; styles are the `.stats-*` / `.bar-*` classes in `index.css`
+- Charges are bucketed into 9 categories + Other by an ordered keyword list (`CHARGE_CATEGORIES`, first match wins). Thurston charge text is raw, so this is heuristic
+- Bail is parsed from the per-charge string (`"$1000, BONDABLE"`, `"NO BAIL"`). The data only says bail was *set*, not that it was posted, so labels say "bail set", not "paid"
+- Recidivism matches people by exact name string, so it undercounts (name variants) and the tracking window is short
+- There is intentionally no bookings-by-date chart (removed — see known issue below); only day-of-week
+
+## Known issues / TODO
+- **Fix booking dates.** `bookingDate` is the earliest charge `arrestDate`, not a real booking timestamp. Consequences: day-of-week stats reflect arrest dates; ~11 entries have `bookingDate: null` and fall back to `firstSeen` (when the scraper first saw them); the Stats header "since <date>" shows old arrest dates (e.g. 1/21/2024) rather than when tracking began; time served is measured from this date. Decide on a better source (e.g. `firstSeen` for people booked since tracking began, arrest date only as a fallback) and apply it consistently in `scrape.js` and `stats.js`.
+- A 298-bookings-on-one-day spike was reported on `/stats` once and never reproduced (real max was ~18/day) — probably a stale build. Re-check if it reappears.
+
+## Local dev gotcha
+`frontend/public/data/` is gitignored and only refreshed by CI (`cp data/*.json frontend/public/data/`). Before previewing locally, run that copy or the dev server shows stale data.
+
+## Remaining setup
+- Add the Thurston link to `mason-jail-roster/server.js`'s `.nav-section` (wajaildata.org hub) if not already done
