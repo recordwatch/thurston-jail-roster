@@ -11,6 +11,9 @@ function formatDate(dateStr) {
 
 function formatTime(dateStr) {
   if (!dateStr) return ''
+  // Releases backfilled from the county's "Recently Released" list carry a
+  // date only (no time) — show the date rather than a fake 12:00 AM.
+  if (!dateStr.includes(',')) return formatDate(dateStr)
   const d = new Date(dateStr)
   let hours = d.getHours()
   const minutes = String(d.getMinutes()).padStart(2, '0')
