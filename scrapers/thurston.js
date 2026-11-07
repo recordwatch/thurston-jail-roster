@@ -1,9 +1,12 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-const BASE_URL = 'https://www.co.thurston.wa.us/cm/sheriff/bureau-corrections-roster-search.asp';
-const ROSTER_URL = `${BASE_URL}?mod=fourth`;
-const DETAIL_BASE = `${BASE_URL}?mod=third&idnum=`;
+// The county moved the roster off www.co.thurston.wa.us (unreachable since
+// ~2026-10-30) to this app, which www.thurstoncountywa.gov embeds in an iframe.
+// Inmate numbers (Z0012345) are unchanged, so roster.json history carries over.
+const BASE_URL = 'https://tcos.thurstoncountywa.gov/Sheriff/Roster';
+const ROSTER_URL = BASE_URL;
+const DETAIL_BASE = `${BASE_URL}/Detail/`;
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -28,21 +31,21 @@ export async function scrapeRoster() {
   const inmates = [];
   const seen = new Set();
 
-  $('a[href*="mod=third"]').each((_, el) => {
-    const href = $(el).attr('href') || '';
-    const m = href.match(/idnum=([A-Za-z0-9]+)/i);
+  // #currentTable = in custody (one row per person, name split into
+  // Last/First/Middle cells). #releasedTable has no detail links, so skip it.
+  $('#currentTable tbody tr').each((_, row) => {
+    const href = $(row).find('a[href*="/Roster/Detail/"]').attr('href') || '';
+    const m = href.match(/\/Detail\/([A-Za-z0-9]+)/);
     if (!m) return;
     const idnum = m[1];
     if (seen.has(idnum)) return;
     seen.add(idnum);
 
-    // Anchor text is "LASTNAME , FIRSTNAME MIDDLENAME" once whitespace/nbsp collapse
-    const raw = $(el).text().replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
-    const commaIdx = raw.indexOf(',');
-    if (commaIdx === -1) return;
-    const last = raw.slice(0, commaIdx).trim();
-    const firstMiddle = raw.slice(commaIdx + 1).trim();
+    const [last, first, middle] = $(row).find('td').map((_, td) =>
+      $(td).text().replace(/\s+/g, ' ').trim()
+    ).get();
     if (!last) return;
+    const firstMiddle = [first, middle].filter(Boolean).join(' ');
 
     inmates.push({
       idnum,
@@ -53,38 +56,39 @@ export async function scrapeRoster() {
   return inmates;
 }
 
-// Charge Information page for one inmate: repeating COURT / CAUSE NUMBER /
-// CHARGE / BAIL / ARREST DATE label-value row pairs, one block per charge.
+// The new site prints bail as "$25,000 (BONDABLE)"; the old one printed
+// "$25000, BONDABLE". Keep the old shape so data/roster.json stays uniform.
+function normalizeBail(bail) {
+  if (!bail) return null;
+  const m = bail.match(/^\$([\d,]+)\s*\((.+)\)$/);
+  return m ? `$${m[1].replace(/,/g, '')}, ${m[2]}` : bail;
+}
+
+// Inmate Detail page: one card per charge, each a <dl> of Court / Cause Number
+// / Charge / Bail / Arrest Date. Warrant cards have Jurisdiction instead of
+// Court and no cause number.
 export async function scrapeDetail(idnum) {
   try {
     const res = await axios.get(detailUrl(idnum), { headers: HEADERS, timeout: 20000 });
     const $ = cheerio.load(res.data);
 
     const charges = [];
-    let cur = null;
 
-    $('table tr').each((_, row) => {
-      const tds = $(row).find('td').map((_, td) =>
-        $(td).text().replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
-      ).get();
-      if (tds.length < 2) return;
-
-      const [label, value] = tds;
-
-      if (/^COURT:/i.test(label)) {
-        if (cur) charges.push(cur);
-        cur = { court: value || null, causeNumber: null, charge: null, bail: null, arrestDate: null };
-        return;
-      }
-      if (!cur) return;
-
-      if (/^CAUSE NUMBER:/i.test(label)) cur.causeNumber = value || null;
-      else if (/^CHARGE:/i.test(label))  cur.charge = value || null;
-      else if (/^BAIL:/i.test(label))    cur.bail = value || null;
-      else if (/^ARREST DATE:/i.test(label)) cur.arrestDate = value || null;
+    $('main dl').each((_, dl) => {
+      const fields = {};
+      $(dl).find('dt').each((_, dt) => {
+        const label = $(dt).text().replace(/\s+/g, ' ').trim().toLowerCase();
+        fields[label] = $(dt).next('dd').text().replace(/\s+/g, ' ').trim() || null;
+      });
+      if (!fields.charge) return;
+      charges.push({
+        court: fields.court || fields.jurisdiction || null,
+        causeNumber: fields['cause number'] || null,
+        charge: fields.charge,
+        bail: normalizeBail(fields.bail),
+        arrestDate: fields['arrest date'] || null
+      });
     });
-
-    if (cur) charges.push(cur);
 
     return { charges };
   } catch (err) {

@@ -6,7 +6,7 @@ A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Offi
 ## URLs
 - **Live site:** https://recordwatch.github.io/thurston-jail-roster/
 - **GitHub repo:** https://github.com/recordwatch/thurston-jail-roster (all repos live under the `recordwatch` org — no more `theonlytacocat`)
-- **Source data:** Thurston County Sheriff — https://www.co.thurston.wa.us/cm/sheriff/bureau-corrections-roster-search.asp?mod=fourth
+- **Source data:** Thurston County Sheriff — https://tcos.thurstoncountywa.gov/Sheriff/Roster (embedded by https://www.thurstoncountywa.gov/departments/sheriff/corrections-bureau/corrections-facility-roster-search). Moved 2026-11-07 from the old `www.co.thurston.wa.us/...roster-search.asp?mod=fourth` page, which went unreachable ~2026-10-30 (no scrapes succeeded Nov 3–7). Inmate numbers are the same `Z0012345` format, so history carried over
 
 ## Architecture
 - **Scraper:** `scrape.js` — standalone Node.js script, runs via GitHub Actions cron every 30 min
@@ -16,9 +16,10 @@ A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Offi
 
 ## Key technical notes
 - No CAPTCHA — plain HTTP with **axios + cheerio** (same style as Kitsap), no Playwright needed
-- The roster page (`mod=fourth`) is a single unpaginated page listing every current inmate — no pagination to handle
+- The roster page is a single unpaginated page: `#currentTable` (in custody, Last/First/Middle cells, linked to detail) and `#releasedTable` (recent releases with real release dates + docket number, no detail link — not used yet)
+- Detail pages are one `<dl>` card per charge. Warrant cards say `Jurisdiction` instead of `Court` (stored in `court`) and have no cause number. Bail prints as `$25,000 (BONDABLE)`; the scraper normalizes it to the old `$25000, BONDABLE` shape
 - Each inmate has an `idnum` (e.g. `Z0072311`), used in place of a booking number — it's the only stable identifier the site exposes
-- Detail pages (`mod=third&idnum=X`) only expose **charge info**: court, cause number, charge, bail, arrest date. Unlike Pierce/Kitsap, Thurston does **not** expose age/sex/race/height/weight/photo — the frontend and data model reflect that. It also has no release-type codes (RPR/RCC/etc.) like Mason, so `/stats` and `/deepstats` are built only from what Thurston does expose (see below)
+- Detail pages (`/Sheriff/Roster/Detail/<idnum>`) only expose **charge info**: court, cause number, charge, bail, arrest date. Unlike Pierce/Kitsap, Thurston does **not** expose age/sex/race/height/weight/photo — the frontend and data model reflect that. It also has no release-type codes (RPR/RCC/etc.) like Mason, so `/stats` and `/deepstats` are built only from what Thurston does expose (see below)
 - `bookingDate` is derived as the earliest `arrestDate` across a person's charges, since the roster has no explicit booking date field
 - Release detection is diff-based only (no live release feed like Kitsap's XML endpoint): if an `idnum` drops off the roster page, it's marked released
 - Detail fetching is incremental to be polite to a small county server: new bookings get detail fetched in a capped batch (30), and a rolling backfill (40/run) fills in detail for anyone still missing it — mirrors Pierce's approach rather than Kitsap's full-refresh-every-run approach, since Thurston's roster (~280 people) is much larger than Kitsap's
