@@ -90,7 +90,7 @@ export default function HistoryLog({ entries, search = '' }) {
                 <div className="history-section-title">BOOKED ({bookedCount})</div>
                 <ul className="history-list">
                   {dayData.booked.map(entry => (
-                    <li key={entry.idnum} className="history-item">
+                    <li key={entry.idnum || `${entry.name}|${entry.releasedAt}`} className="history-item">
                       <span className="history-name">{entry.name}</span>
                       <span className="history-meta">
                         Booked: {formatTime(entry.bookingDate || entry.firstSeen)}
@@ -111,12 +111,15 @@ export default function HistoryLog({ entries, search = '' }) {
                   {dayData.released.map(entry => {
                     const timeServed = calculateTimeServed(entry.bookingDate || entry.firstSeen, entry.releasedAt)
                     return (
-                      <li key={entry.idnum} className="history-item">
+                      <li key={entry.idnum || `${entry.name}|${entry.releasedAt}`} className="history-item">
                         <span className="history-name">{entry.name}</span>
                         <span className="history-meta">
                           Released: {formatTime(entry.releasedAt)}
                           {timeServed && (
                             <span className="history-time-served"> | Time served: {timeServed}</span>
+                          )}
+                          {entry.source === 'released-list' && (
+                            <span className="history-charges"> | Not seen in custody by this monitor{entry.dockets?.length > 0 && ` | Docket: ${entry.dockets.join(', ')}`}</span>
                           )}
                           {entry.charges && entry.charges.length > 0 && (
                             <span className="history-charges"> | Charges: {entry.charges.map(c => c.charge).filter(Boolean).join(', ')}</span>

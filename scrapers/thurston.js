@@ -22,17 +22,27 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Full current-inmate list — a single unpaginated page listing everyone
-// currently booked, each linking to a detail page via idnum.
+const cellText = ($, td) => $(td).text().replace(/\s+/g, ' ').trim();
+
+function joinName(last, first, middle) {
+  const firstMiddle = [first, middle].filter(Boolean).join(' ');
+  return firstMiddle ? `${last}, ${firstMiddle}` : last;
+}
+
+// One unpaginated page with two tables: everyone currently booked (linked to
+// a detail page via idnum) and recent releases (last ~5 days, no idnum).
 export async function scrapeRoster() {
   const res = await axios.get(ROSTER_URL, { headers: HEADERS, timeout: 20000 });
   const $ = cheerio.load(res.data);
+  return { inmates: parseCurrent($), released: parseReleased($) };
+}
 
+function parseCurrent($) {
   const inmates = [];
   const seen = new Set();
 
   // #currentTable = in custody (one row per person, name split into
-  // Last/First/Middle cells). #releasedTable has no detail links, so skip it.
+  // Last/First/Middle cells).
   $('#currentTable tbody tr').each((_, row) => {
     const href = $(row).find('a[href*="/Roster/Detail/"]').attr('href') || '';
     const m = href.match(/\/Detail\/([A-Za-z0-9]+)/);
@@ -41,19 +51,31 @@ export async function scrapeRoster() {
     if (seen.has(idnum)) return;
     seen.add(idnum);
 
-    const [last, first, middle] = $(row).find('td').map((_, td) =>
-      $(td).text().replace(/\s+/g, ' ').trim()
-    ).get();
+    const [last, first, middle] = $(row).find('td').map((_, td) => cellText($, td)).get();
     if (!last) return;
-    const firstMiddle = [first, middle].filter(Boolean).join(' ');
 
-    inmates.push({
-      idnum,
-      name: firstMiddle ? `${last}, ${firstMiddle}` : last
-    });
+    inmates.push({ idnum, name: joinName(last, first, middle) });
   });
 
   return inmates;
+}
+
+// #releasedTable: Release Date / Last / First / Middle / Docket Number, one
+// row per docket, so a person released on several cases appears several
+// times. Grouped here into one release per person per day.
+function parseReleased($) {
+  const byKey = new Map();
+  $('#releasedTable tbody tr').each((_, row) => {
+    const [date, last, first, middle, docket] = $(row).find('td').map((_, td) => cellText($, td)).get();
+    if (!date || !last || !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(date)) return;
+    const name = joinName(last, first, middle);
+    const key = `${name}|${date}`;
+    if (!byKey.has(key)) byKey.set(key, { name, date, dockets: [] });
+    if (docket && docket !== '—' && !byKey.get(key).dockets.includes(docket)) {
+      byKey.get(key).dockets.push(docket);
+    }
+  });
+  return [...byKey.values()];
 }
 
 // The new site prints bail as "$25,000 (BONDABLE)"; the old one printed

@@ -13,6 +13,11 @@ function getDateLabel(entry, field = 'firstSeen') {
   return raw.split(',')[0].trim()
 }
 
+// Releases taken from the county's released list have no idnum.
+function entryKey(entry) {
+  return entry.idnum || `${entry.name}|${entry.releasedAt}`
+}
+
 function BookingLog({ entries, grouped = false, groupBy = 'firstSeen' }) {
   if (entries.length === 0) {
     return <div className="empty">No records match your search.</div>
@@ -23,7 +28,7 @@ function BookingLog({ entries, grouped = false, groupBy = 'firstSeen' }) {
       <div className="log">
         <div className="log-count">{entries.length} record{entries.length !== 1 ? 's' : ''}</div>
         {entries.map(entry => (
-          <BookingCard key={entry.idnum} entry={entry} />
+          <BookingCard key={entryKey(entry)} entry={entry} />
         ))}
       </div>
     )
@@ -47,7 +52,7 @@ function BookingLog({ entries, grouped = false, groupBy = 'firstSeen' }) {
         <div key={date}>
           <div className="date-separator">{date}</div>
           {group.map(entry => (
-            <BookingCard key={entry.idnum} entry={entry} />
+            <BookingCard key={entryKey(entry)} entry={entry} />
           ))}
         </div>
       ))}

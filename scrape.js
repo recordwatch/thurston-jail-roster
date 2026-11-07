@@ -45,15 +45,33 @@ function earliestArrestDate(charges) {
   return dates[0].raw;
 }
 
+// Calendar day of "11/5/2026" or "11/05/2026, 06:10:20" as a day count, for
+// comparing dates without time zones getting involved.
+function dayNumber(str) {
+  const m = (str || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return m ? Date.UTC(+m[3], +m[1] - 1, +m[2]) / 86400000 : null;
+}
+
+// "11/5/2026" -> "11/05/2026", matching nowPST()'s date part. The county
+// publishes no release time, so these stay date-only.
+function padDate(str) {
+  const [m, d, y] = str.split('/');
+  return `${m.padStart(2, '0')}/${d.padStart(2, '0')}/${y}`;
+}
+
+// A diff-detected release more than this many days after the county's
+// release date is treated as a different stay, not the same release.
+const MAX_DETECT_LAG_DAYS = 7;
+
 async function run() {
   console.log(`[${nowPST()}] Running Thurston County scrape...`);
 
   let roster = readJSON(ROSTER_FILE, {});
   let log    = readJSON(LOG_FILE, []);
 
-  let inmates;
+  let inmates, released;
   try {
-    inmates = await scrapeRoster();
+    ({ inmates, released } = await scrapeRoster());
   } catch (err) {
     console.error('Roster fetch failed:', err.message);
     process.exit(1);
@@ -146,13 +164,64 @@ async function run() {
     }
   }
 
+  // The county's Recently Released list (last ~5 days, by name, no idnum):
+  // - when we noticed a release after the county's date (an outage, or a
+  //   release just before midnight), use the county's date;
+  // - record releases of people the monitor never saw in custody (stays
+  //   shorter than the scrape interval, or bookings during an outage).
+  let corrected = 0;
+  let added = 0;
+  for (const rel of released) {
+    const relDay = dayNumber(rel.date);
+    const same = Object.values(roster).filter(e => e.name === rel.name);
+
+    // Released on one docket but still held on another.
+    if (same.some(e => e.status === 'in_custody' && dayNumber(e.firstSeen) <= relDay)) continue;
+
+    const match = same.find(e => {
+      const out = dayNumber(e.releasedAt);
+      if (out === null) return false;
+      if (e.source === 'released-list') return out === relDay;
+      return dayNumber(e.firstSeen) <= relDay && out >= relDay && out - relDay <= MAX_DETECT_LAG_DAYS;
+    });
+
+    if (match) {
+      if (dayNumber(match.releasedAt) > relDay) {
+        const logEntry = log.find(e => e.idnum === match.idnum && e.releasedAt === match.releasedAt);
+        console.log(`  RELEASE DATE: ${match.name} ${match.releasedAt} -> ${rel.date}`);
+        match.releasedAt = padDate(rel.date);
+        if (logEntry) logEntry.releasedAt = match.releasedAt;
+        corrected++;
+      }
+      continue;
+    }
+
+    console.log(`  RELEASED (never seen in custody): ${rel.name} ${rel.date}`);
+    const entry = {
+      idnum:         null,
+      bookingNumber: rel.dockets[0] || null,
+      dockets:       rel.dockets,
+      name:          rel.name,
+      status:        'released',
+      firstSeen:     null,
+      releasedAt:    padDate(rel.date),
+      bookingDate:   null,
+      charges:       [],
+      hasDetail:     false,
+      source:        'released-list',
+    };
+    roster[`REL-${entry.releasedAt}-${rel.name}`] = entry;
+    log.unshift(entry);
+    added++;
+  }
+
   writeJSON(ROSTER_FILE, roster);
   writeJSON(LOG_FILE, log);
 
   const inCustody = Object.values(roster).filter(i => i.status === 'in_custody').length;
   writeJSON(STATUS_FILE, { inCustody, lastUpdated: nowPST() });
 
-  console.log(`[${nowPST()}] Done. ${newBookings.length} new, ${releasedIds.length} released. ${inCustody} in custody.`);
+  console.log(`[${nowPST()}] Done. ${newBookings.length} new, ${releasedIds.length} released. ${added} release(s) only on the county's released list, ${corrected} release date(s) corrected. ${inCustody} in custody.`);
 }
 
 run().catch(err => {

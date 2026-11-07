@@ -98,7 +98,7 @@ export function computeStats(entries) {
     earliestBooking = withStart.reduce((min, e) => (e.start < min ? e.start : min), withStart[0].start)
 
     // Only average over days the scraper was actually watching
-    const seen = entries.map(e => new Date(e.firstSeen)).filter(d => !isNaN(d))
+    const seen = entries.filter(e => e.firstSeen).map(e => new Date(e.firstSeen)).filter(d => !isNaN(d))
     const trackingStart = seen.reduce((min, d) => (d < min ? d : min), seen[0])
 
     const dayCount = Math.max(1, Math.floor((now - trackingStart) / DAY_MS) + 1)

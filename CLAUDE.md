@@ -16,12 +16,15 @@ A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Offi
 
 ## Key technical notes
 - No CAPTCHA — plain HTTP with **axios + cheerio** (same style as Kitsap), no Playwright needed
-- The roster page is a single unpaginated page: `#currentTable` (in custody, Last/First/Middle cells, linked to detail) and `#releasedTable` (recent releases with real release dates + docket number, no detail link — not used yet)
+- The roster page is a single unpaginated page: `#currentTable` (in custody, Last/First/Middle cells, linked to detail) and `#releasedTable` (last ~5 days of releases: release date, name, docket number — no idnum, no detail link)
 - Detail pages are one `<dl>` card per charge. Warrant cards say `Jurisdiction` instead of `Court` (stored in `court`) and have no cause number. Bail prints as `$25,000 (BONDABLE)`; the scraper normalizes it to the old `$25000, BONDABLE` shape
 - Each inmate has an `idnum` (e.g. `Z0072311`), used in place of a booking number — it's the only stable identifier the site exposes
 - Detail pages (`/Sheriff/Roster/Detail/<idnum>`) only expose **charge info**: court, cause number, charge, bail, arrest date. Unlike Pierce/Kitsap, Thurston does **not** expose age/sex/race/height/weight/photo — the frontend and data model reflect that. It also has no release-type codes (RPR/RCC/etc.) like Mason, so `/stats` and `/deepstats` are built only from what Thurston does expose (see below)
 - `bookingDate` is derived as the earliest `arrestDate` across a person's charges, since the roster has no explicit booking date field
-- Release detection is diff-based only (no live release feed like Kitsap's XML endpoint): if an `idnum` drops off the roster page, it's marked released
+- Release detection is diff-based (if an `idnum` drops off the roster page, it's marked released), then checked against `#releasedTable` by full name each run (`scrape.js`):
+  - if the diff caught a release on a later day than the county's date (outage, or a release just before midnight), `releasedAt` becomes the county's date, stored **date-only** (`11/05/2026`, no time — the county publishes none; the history log shows the date instead of a time)
+  - a release for someone the monitor never saw in custody (stay shorter than the 30-min interval, or booked during an outage) becomes a `source: 'released-list'` entry: `idnum: null`, `firstSeen`/`bookingDate: null`, `charges: []`, `dockets: [...]`, keyed `REL-<date>-<name>` in roster.json. The frontend labels these "Not seen in custody by this monitor"
+  - skipped if that name is still in custody (released on one docket, held on another); a diff release more than 7 days after the county date counts as a different stay
 - Detail fetching is incremental to be polite to a small county server: new bookings get detail fetched in a capped batch (30), and a rolling backfill (40/run) fills in detail for anyone still missing it — mirrors Pierce's approach rather than Kitsap's full-refresh-every-run approach, since Thurston's roster (~280 people) is much larger than Kitsap's
 
 ## Key files

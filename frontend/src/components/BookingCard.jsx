@@ -17,6 +17,8 @@ export default function BookingCard({ entry }) {
   const [open, setOpen] = useState(false)
 
   const isReleased = entry.status === 'released'
+  // Only on the county's Recently Released list: no idnum, booking or charges.
+  const releaseOnly = entry.source === 'released-list'
   const timeHeld = isReleased ? calcTimeHeld(entry.firstSeen, entry.releasedAt) : null
 
   return (
@@ -25,7 +27,9 @@ export default function BookingCard({ entry }) {
         <div className="card-left">
           <div className="card-name">{entry.name}</div>
           <div className="card-meta">
-            ID #{entry.idnum || entry.bookingNumber} &nbsp;·&nbsp; Booked: {entry.bookingDate || entry.firstSeen}
+            {releaseOnly
+              ? <>Docket #{entry.dockets?.join(', ') || 'not listed'} &nbsp;·&nbsp; Not seen in custody by this monitor</>
+              : <>ID #{entry.idnum || entry.bookingNumber} &nbsp;·&nbsp; Booked: {entry.bookingDate || entry.firstSeen}</>}
             {timeHeld && <span className="card-time-held"> &nbsp;·&nbsp; Held: {timeHeld}</span>}
           </div>
         </div>
@@ -45,7 +49,12 @@ export default function BookingCard({ entry }) {
             </div>
           )}
 
-          {entry.charges && entry.charges.length > 0 ? (
+          {releaseOnly ? (
+            <div className="card-charges">
+              <div className="charges-title">Charges</div>
+              <div className="charge-row charge-pending">Not published. The monitor never saw this person in custody (a stay shorter than its 30-minute check, or during a source outage), so this release comes from the county's released list, which gives only the name, release date and docket number.</div>
+            </div>
+          ) : entry.charges && entry.charges.length > 0 ? (
             <div className="card-charges">
               <div className="charges-title">Charges ({entry.charges.length})</div>
               {entry.charges.map((c, i) => (
