@@ -1,15 +1,17 @@
 name: Scrape & Deploy
 
+# No `schedule:` trigger: GitHub ran its every-30-minute cron only every 5-8
+# hours (4 runs on 2026-11-11 instead of 48), which delays release times and
+# misses short stays. cron-job.org starts this workflow through the GitHub API
+# (workflow_dispatch) every 30 minutes instead, like the King County repo.
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# GitHub's schedule and the manual/cron-job.org trigger can start runs at the
-# same moment; queue them so two runs never push at once.
+# A cron-job.org run and a manual one can start at the same moment; queue
+# them so two runs never push at once.
 concurrency:
   group: scrape
   cancel-in-progress: false
