@@ -9,7 +9,7 @@ A public jail roster monitor for Thurston County, WA. Scrapes the Sheriff's Offi
 - **Source data:** Thurston County Sheriff — https://tcos.thurstoncountywa.gov/Sheriff/Roster (embedded by https://www.thurstoncountywa.gov/departments/sheriff/corrections-bureau/corrections-facility-roster-search). Moved 2026-11-07 from the old `www.co.thurston.wa.us/...roster-search.asp?mod=fourth` page, which went unreachable ~2026-10-30 (no scrapes succeeded Nov 3–7). Inmate numbers are the same `Z0012345` format, so history carried over
 
 ## Architecture
-- **Scraper:** `scrape.js` — standalone Node.js script, runs via GitHub Actions cron every 30 min
+- **Scraper:** `scrape.js` — standalone Node.js script, run by GitHub Actions. **cron-job.org** starts it through `workflow_dispatch` every 30 min; there is no GitHub `schedule` (removed 2026-11, when GitHub's cron ran only every 5-8 hours)
 - **Frontend:** React + Vite, served as static files on GitHub Pages (`gh-pages` branch)
 - **Data storage:** JSON files committed to git in `data/` — no server, no database
 - **Hosting cost:** $0
